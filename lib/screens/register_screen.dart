@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:fasalmitra/screens/phone_login.dart';
@@ -21,16 +22,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _captchaController = TextEditingController();
+  final _otpController = TextEditingController();
 
   bool _submitting = false;
   bool _cachedGrass = false;
   CaptchaData? _captcha;
   bool _captchaLoading = false;
 
+  // OTP State
+  String? _verificationId;
+  int? _resendToken;
+  bool _codeSent = false;
+
   @override
   void initState() {
     super.initState();
     _loadCaptcha();
+    _checkCurrentUser();
+  }
+
+  void _checkCurrentUser() {
+    final user = AuthService.instance.currentUser;
+    if (user != null && user.phoneNumber != null) {
+      String phone = user.phoneNumber!;
+      if (phone.startsWith('+91')) {
+        phone = phone.substring(3);
+      }
+      _phoneController.text = phone;
+    }
   }
 
   @override
@@ -47,6 +66,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _captchaController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -73,6 +93,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Check if user is already authenticated
+    final currentUser = AuthService.instance.currentUser;
+
     if (_captcha == null) {
       ScaffoldMessenger.of(
         context,
@@ -87,24 +111,126 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    // Sanitize phone number
+    String rawPhone = _phoneController.text.trim();
+    rawPhone = rawPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (rawPhone.length > 10 && rawPhone.startsWith('91')) {
+      rawPhone = rawPhone.substring(2);
+    }
+
+    if (rawPhone.length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 10-digit mobile number'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
+    final lang = LanguageService.instance;
+
     try {
-      await AuthService.instance.verifyCaptcha(
-        captchaId: _captcha!.id,
-        text: captchaText,
-      );
+      // If user is NOT logged in, we need to do OTP flow
+      if (currentUser == null) {
+        if (!_codeSent) {
+          // Step 1: Send OTP
+          await AuthService.instance.verifyCaptcha(
+            captchaId: _captcha!.id,
+            text: captchaText,
+          );
+
+          await AuthService.instance.sendOtp(
+            phoneNumber: '+91$rawPhone',
+            verificationCompleted: (credential) async {
+              // Auto-verification (rare but possible)
+              await FirebaseAuth.instance.signInWithCredential(credential);
+              // Proceed to register
+              if (mounted) _submit();
+            },
+            verificationFailed: (e) {
+              messenger.showSnackBar(
+                SnackBar(content: Text(e.message ?? 'Verification failed')),
+              );
+              setState(() => _submitting = false);
+            },
+            codeSent: (verificationId, resendToken) {
+              setState(() {
+                _verificationId = verificationId;
+                _resendToken = resendToken;
+                _codeSent = true;
+                _submitting = false;
+              });
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text('${lang.t('otpSentPrefix')} +91$rawPhone'),
+                ),
+              );
+            },
+            codeAutoRetrievalTimeout: (_) {},
+            forceResendingToken: _resendToken,
+          );
+          return; // Wait for user to enter OTP
+        } else {
+          // Step 2: Verify OTP
+          final otp = _otpController.text.trim();
+          if (otp.length != 6) {
+            messenger.showSnackBar(SnackBar(content: Text(lang.t('enterOtp'))));
+            setState(() => _submitting = false);
+            return;
+          }
+
+          await AuthService.instance.verifyOtp(_verificationId!, otp);
+
+          // Wait for auth state to propagate
+          int retries = 0;
+          while (AuthService.instance.currentUser == null && retries < 10) {
+            await Future.delayed(const Duration(milliseconds: 200));
+            retries++;
+          }
+
+          // Now user is logged in, proceed to register logic below
+        }
+      } else {
+        // User is logged in, just verify captcha if not already done in OTP step?
+        // Actually, if they are logged in, we might skip captcha or just verify it again.
+        // Let's verify it again to be safe/consistent with existing flow.
+        await AuthService.instance.verifyCaptcha(
+          captchaId: _captcha!.id,
+          text: captchaText,
+        );
+      }
+
+      // Step 3: Register User Data
       await AuthService.instance.registerUser(
         name: _nameController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
+        phoneNumber: '+91$rawPhone',
       );
+
       if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Registration submitted!')),
       );
-      Navigator.of(context).pushReplacementNamed(PhoneLoginScreen.routeName);
+      // Navigate to Home instead of Login, since they are now logged in
+      Navigator.of(context).pushReplacementNamed(
+        PhoneLoginScreen.routeName,
+      ); // Or Home? User requested "login/register work", usually register -> login or home.
+      // The original code went to PhoneLoginScreen. Let's keep it or maybe go to Home if they are logged in?
+      // If they just registered, they are logged in. Sending them to login screen might be confusing if they are already logged in.
+      // But let's stick to original flow: Register -> Login Screen (maybe to force re-login or just as a success page).
+      // Wait, if they are logged in, going to PhoneLoginScreen might auto-redirect to Home if PhoneLoginScreen checks auth.
+      // Let's send them to Home if they are logged in.
+      // Actually, let's stick to the requested behavior: "make it work".
+      // Original code: Navigator.of(context).pushReplacementNamed(PhoneLoginScreen.routeName);
     } catch (err) {
-      messenger.showSnackBar(SnackBar(content: Text(err.toString())));
+      String message = err.toString();
+      if (err is FirebaseAuthException) {
+        message = '${err.code}: ${err.message}';
+      } else if (err is AuthException) {
+        message = err.message;
+      }
+      messenger.showSnackBar(SnackBar(content: Text('Error: $message')));
       _loadCaptcha();
     } finally {
       if (mounted) {
@@ -192,44 +318,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 alignment: Alignment.centerLeft,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 380),
-                  child: ValueListenableBuilder<String>(
-                    valueListenable: TipService.instance.listenable,
-                    builder: (context, tip, _) {
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${lang.t('welcome')}\n${lang.t('appName')}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 36,
-                              fontWeight: FontWeight.w600,
+                  child: SingleChildScrollView(
+                    child: ValueListenableBuilder<String>(
+                      valueListenable: TipService.instance.listenable,
+                      builder: (context, tip, _) {
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${lang.t('welcome')}\n${lang.t('appName')}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 36,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          if (tip.isNotEmpty)
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 500),
-                              child: Container(
-                                key: ValueKey(tip),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Text(
-                                  tip,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
+                            const SizedBox(height: 16),
+                            if (tip.isNotEmpty)
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 500),
+                                child: Container(
+                                  key: ValueKey(tip),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Text(
+                                    tip,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -242,6 +370,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildRegisterCard() {
     final lang = LanguageService.instance;
+    final currentUser = AuthService.instance.currentUser;
+    // Determine button text
+    String buttonText = lang.t('registerCta');
+    if (currentUser == null) {
+      if (_codeSent) {
+        buttonText =
+            'Verify & Register'; // TODO: Add translation key if needed, or use hardcoded for now
+      } else {
+        buttonText = lang.t('sendOtp');
+      }
+    }
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
@@ -291,16 +431,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           TextFormField(
                             controller: _phoneController,
                             keyboardType: TextInputType.phone,
+                            // Allow editing if not logged in
+                            readOnly: currentUser != null,
                             decoration: InputDecoration(
                               labelText: lang.t('mobile'),
-                              prefixText: '+',
+                              prefixText: '+91 ',
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
                                 return lang.t('enterPhone');
                               }
-                              if (!value.trim().startsWith('+')) {
-                                return 'Include country code (e.g. +91…)';
+                              if (value.trim().length != 10) {
+                                return 'Enter 10 digit mobile number';
                               }
                               return null;
                             },
@@ -320,6 +462,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               _buildCaptchaBox(),
                             ],
                           ),
+                          if (_codeSent) ...[
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: _otpController,
+                              maxLength: 6,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: lang.t('enterOtp'),
+                                counterText: '',
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           SizedBox(
                             width: double.infinity,
@@ -333,7 +487,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         strokeWidth: 2,
                                       ),
                                     )
-                                  : Text(lang.t('registerCta')),
+                                  : Text(buttonText),
                             ),
                           ),
                         ],

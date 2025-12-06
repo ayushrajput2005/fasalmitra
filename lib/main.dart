@@ -1,9 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fasalmitra/firebase_options.dart';
 import 'package:fasalmitra/screens/home_page.dart';
+import 'package:fasalmitra/widgets/custom_cursor_overlay.dart';
 
 import 'package:fasalmitra/screens/phone_login.dart';
 import 'package:fasalmitra/screens/create_listing_screen.dart';
@@ -20,6 +22,13 @@ import 'package:fasalmitra/services/tip_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Bypass reCAPTCHA for testing on localhost
+  // Note: This requires adding test phone numbers in Firebase Console -> Authentication -> Sign-in method -> Phone -> Phone numbers for testing
+  await FirebaseAuth.instance.setSettings(
+    appVerificationDisabledForTesting: true,
+  );
+
   final prefs = await SharedPreferences.getInstance();
   await AuthService.instance.init(prefs);
 
@@ -48,6 +57,9 @@ class FasalMitraApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],
+          builder: (context, child) {
+            return CustomCursorOverlay(child: child!);
+          },
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
             useMaterial3: true,

@@ -77,69 +77,6 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     }
   }
 
-  Future<void> _sendOtp() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_captcha == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LanguageService.instance.t('captchaNotReady'))),
-      );
-      return;
-    }
-    final captchaText = _captchaController.text.trim();
-    if (captchaText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LanguageService.instance.t('captchaEnter'))),
-      );
-      return;
-    }
-    final phone = _phoneController.text.trim();
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _sending = true);
-
-    try {
-      await AuthService.instance.verifyCaptcha(
-        captchaId: _captcha!.id,
-        text: captchaText,
-      );
-
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: phone,
-        forceResendingToken: _resendToken,
-        verificationCompleted: (credential) async {
-          await FirebaseAuth.instance.signInWithCredential(credential);
-        },
-        verificationFailed: (exception) {
-          messenger.showSnackBar(
-            SnackBar(content: Text(exception.message ?? 'Verification failed')),
-          );
-        },
-        codeSent: (verificationId, resendToken) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                '${LanguageService.instance.t('otpSentPrefix')} $phone',
-              ),
-            ),
-          );
-          setState(() {
-            _verificationId = verificationId;
-            _resendToken = resendToken;
-            _codeSent = true;
-            _otpController.clear();
-          });
-        },
-        codeAutoRetrievalTimeout: (_) {},
-      );
-    } catch (err) {
-      messenger.showSnackBar(SnackBar(content: Text(err.toString())));
-      _loadCaptcha();
-    } finally {
-      if (mounted) {
-        setState(() => _sending = false);
-      }
-    }
-  }
-
   Future<void> _verifyOtp() async {
     if (_verificationId == null) return;
     final code = _otpController.text.trim();
@@ -151,11 +88,21 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     }
     setState(() => _verifying = true);
     try {
-      await AuthService.instance.verifyOtp(_verificationId!, code);
+      final result = await AuthService.instance.verifyOtp(
+        _verificationId!,
+        code,
+      );
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil(HomePage.routeName, (_) => false);
+
+      if (result['isNewUser'] == true) {
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil(RegisterScreen.routeName, (_) => false);
+      } else {
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil(HomePage.routeName, (_) => false);
+      }
     } catch (err) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -330,7 +277,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                       onPressed: () {
                         Navigator.of(
                           context,
-                        ).pushNamed(RegisterScreen.routeName);
+                        ).pushReplacementNamed(RegisterScreen.routeName);
                       },
                       child: Text(lang.t('newUser')),
                     ),
@@ -365,14 +312,14 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
             keyboardType: TextInputType.phone,
             decoration: InputDecoration(
               labelText: lang.t('mobile'),
-              prefixText: '+',
+              prefixText: '+91 ',
             ),
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return lang.t('enterPhone');
               }
-              if (!value.trim().startsWith('+')) {
-                return 'Include country code (e.g. +91...)';
+              if (value.trim().length != 10) {
+                return 'Enter 10 digit mobile number';
               }
               return null;
             },
@@ -407,6 +354,89 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _sendOtp() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_captcha == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(LanguageService.instance.t('captchaNotReady'))),
+      );
+      return;
+    }
+    final captchaText = _captchaController.text.trim();
+    if (captchaText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(LanguageService.instance.t('captchaEnter'))),
+      );
+      return;
+    }
+
+    // Sanitize phone number
+    String rawPhone = _phoneController.text.trim();
+    // Remove any non-digit characters
+    rawPhone = rawPhone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Handle if user already added 91 or +91 (though regex removed +)
+    if (rawPhone.length > 10 && rawPhone.startsWith('91')) {
+      rawPhone = rawPhone.substring(2);
+    }
+
+    if (rawPhone.length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 10-digit mobile number'),
+        ),
+      );
+      return;
+    }
+
+    final phone = '+91$rawPhone';
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _sending = true);
+
+    try {
+      await AuthService.instance.verifyCaptcha(
+        captchaId: _captcha!.id,
+        text: captchaText,
+      );
+
+      await AuthService.instance.sendOtp(
+        phoneNumber: phone,
+        verificationCompleted: (credential) async {
+          await FirebaseAuth.instance.signInWithCredential(credential);
+        },
+        verificationFailed: (exception) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(exception.message ?? 'Verification failed')),
+          );
+        },
+        codeSent: (verificationId, resendToken) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                '${LanguageService.instance.t('otpSentPrefix')} $phone',
+              ),
+            ),
+          );
+          setState(() {
+            _verificationId = verificationId;
+            _resendToken = resendToken;
+            _codeSent = true;
+            _otpController.clear();
+          });
+        },
+        codeAutoRetrievalTimeout: (_) {},
+        forceResendingToken: _resendToken,
+      );
+    } catch (err) {
+      messenger.showSnackBar(SnackBar(content: Text(err.toString())));
+      _loadCaptcha();
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+    }
   }
 
   Widget _buildCaptchaBox() {

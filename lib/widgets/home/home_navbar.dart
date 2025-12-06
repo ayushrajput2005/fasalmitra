@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fasalmitra/widgets/language_selector.dart';
 import 'package:fasalmitra/services/font_size_service.dart';
 import 'package:fasalmitra/services/language_service.dart';
+import 'package:fasalmitra/widgets/hoverable.dart';
 
 class HomeNavbar extends StatelessWidget {
   const HomeNavbar({
@@ -42,15 +43,19 @@ class HomeNavbar extends StatelessWidget {
 
             // Links
             if (MediaQuery.of(context).size.width > 600) ...[
-              TextButton(
-                onPressed: onAboutUs,
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: Text(lang.t('aboutUs')),
+              Hoverable(
+                child: TextButton(
+                  onPressed: onAboutUs,
+                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                  child: Text(lang.t('aboutUs')),
+                ),
               ),
-              TextButton(
-                onPressed: onCustomerCare,
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: Text(lang.t('customerCare')),
+              Hoverable(
+                child: TextButton(
+                  onPressed: onCustomerCare,
+                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                  child: Text(lang.t('customerCare')),
+                ),
               ),
             ],
 
@@ -96,45 +101,53 @@ class HomeNavbar extends StatelessWidget {
             const SizedBox(width: 8),
 
             // Login button
-            OutlinedButton(
-              onPressed: onLogin,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white),
+            Hoverable(
+              child: OutlinedButton(
+                onPressed: onLogin,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white),
+                ),
+                child: Text(lang.t('login')),
               ),
-              child: Text(lang.t('login')),
             ),
 
             const SizedBox(width: 8),
 
             // Register button (highlighted)
-            FilledButton(
-              onPressed: onRegister,
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: theme.colorScheme.primary,
+            Hoverable(
+              child: FilledButton(
+                onPressed: onRegister,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: theme.colorScheme.primary,
+                ),
+                child: Text(lang.t('register')),
               ),
-              child: Text(lang.t('register')),
             ),
 
             const SizedBox(width: 8),
 
             // Cart Icon
-            IconButton(
-              onPressed: () {
-                Navigator.of(context).pushNamed('/cart');
-              },
-              icon: const Icon(Icons.shopping_cart, color: Colors.white),
-              tooltip: 'Cart',
+            Hoverable(
+              child: IconButton(
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/cart');
+                },
+                icon: const Icon(Icons.shopping_cart, color: Colors.white),
+                tooltip: 'Cart',
+              ),
             ),
 
             // Profile Icon
-            IconButton(
-              onPressed: () {
-                Navigator.of(context).pushNamed('/account');
-              },
-              icon: const Icon(Icons.person, color: Colors.white),
-              tooltip: 'Account',
+            Hoverable(
+              child: IconButton(
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/account');
+                },
+                icon: const Icon(Icons.person, color: Colors.white),
+                tooltip: 'Account',
+              ),
             ),
           ],
         ),
