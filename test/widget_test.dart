@@ -11,10 +11,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fasalmitra/screens/phone_login.dart';
 
 void main() {
-  testWidgets('shows phone login screen', (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: PhoneLoginScreen()));
+  testWidgets('shows login screen', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
 
-    expect(find.text('Phone Login'), findsOneWidget);
-    expect(find.text('Send OTP'), findsOneWidget);
+    expect(
+      find.text('Login'),
+      findsWidgets,
+    ); // findsWidgets because it might appear in title and button
+    expect(find.text('Email'), findsOneWidget);
   });
 }

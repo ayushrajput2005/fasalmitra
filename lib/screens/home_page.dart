@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:fasalmitra/screens/phone_login.dart';
 import 'package:fasalmitra/screens/create_listing_screen.dart';
 import 'package:fasalmitra/screens/marketplace_screen.dart';
+import 'package:fasalmitra/screens/my_orders_screen.dart';
 import 'package:fasalmitra/screens/register_screen.dart';
 import 'package:fasalmitra/services/auth_service.dart';
 import 'package:fasalmitra/services/font_size_service.dart';
@@ -37,7 +38,7 @@ class _HomePageState extends State<HomePage> {
               children: [
                 HomeNavbar(
                   onLogin: () {
-                    Navigator.of(context).pushNamed(PhoneLoginScreen.routeName);
+                    Navigator.of(context).pushNamed(LoginScreen.routeName);
                   },
                   onRegister: () {
                     Navigator.of(context).pushNamed(RegisterScreen.routeName);
@@ -79,7 +80,7 @@ class _HomePageState extends State<HomePage> {
                           onSearchOilSeed: _handleSearchOilSeed,
                           onRecentPost: _handleRecentPost,
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 64),
                         HomeFooter(
                           onSeedPriceMarket: _handleSeedPriceMarket,
                           onSellOilseed: _handleListProduct,
@@ -114,7 +115,7 @@ class _HomePageState extends State<HomePage> {
   void _handleListProduct() {
     final user = AuthService.instance.cachedUser;
     if (user == null) {
-      Navigator.of(context).pushNamed(PhoneLoginScreen.routeName);
+      Navigator.of(context).pushNamed(LoginScreen.routeName);
     } else {
       Navigator.of(context).pushNamed(CreateListingScreen.routeName);
     }
@@ -220,19 +221,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _handleMyOrders() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('My Orders coming soon')));
+    final user = AuthService.instance.cachedUser;
+    if (user == null) {
+      Navigator.of(context).pushNamed(LoginScreen.routeName);
+    } else {
+      Navigator.of(context).pushNamed(MyOrdersScreen.routeName);
+    }
   }
 
   void _handleOrderTracking() {
     final user = AuthService.instance.cachedUser;
     if (user == null) {
-      Navigator.of(context).pushNamed(PhoneLoginScreen.routeName);
-      return;
+      Navigator.of(context).pushNamed(LoginScreen.routeName);
+    } else {
+      // Navigate to My Orders layout which shows tracking status
+      Navigator.of(context).pushNamed(MyOrdersScreen.routeName);
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Order Tracking coming soon')));
   }
 }

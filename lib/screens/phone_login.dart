@@ -8,35 +8,29 @@ import 'package:fasalmitra/services/language_service.dart';
 import 'package:fasalmitra/services/tip_service.dart';
 import 'package:fasalmitra/widgets/language_selector.dart';
 
-class PhoneLoginScreen extends StatefulWidget {
-  const PhoneLoginScreen({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   static const String routeName = '/login';
 
   @override
-  State<PhoneLoginScreen> createState() => _PhoneLoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
+class _LoginScreenState extends State<LoginScreen> {
   static const String _grassAsset = 'assets/images/grass.png';
   final _formKey = GlobalKey<FormState>();
-  final _phoneController = TextEditingController();
-  final _captchaController = TextEditingController();
-  final _otpController = TextEditingController();
 
-  bool _sending = false;
-  bool _verifying = false;
-  bool _codeSent = false;
-  String? _verificationId;
-  int? _resendToken;
-  CaptchaData? _captcha;
-  bool _captchaLoading = false;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  bool _loggingIn = false;
   bool _cachedGrass = false;
+  bool _passwordVisible = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCaptcha();
   }
 
   @override
@@ -50,67 +44,40 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
   @override
   void dispose() {
-    _phoneController.dispose();
-    _captchaController.dispose();
-    _otpController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadCaptcha() async {
-    setState(() => _captchaLoading = true);
-    try {
-      final captcha = await AuthService.instance.fetchCaptcha();
-      if (!mounted) return;
-      setState(() {
-        _captcha = captcha;
-        _captchaController.clear();
-      });
-    } catch (err) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Captcha failed: $err')));
-    } finally {
-      if (mounted) {
-        setState(() => _captchaLoading = false);
-      }
-    }
-  }
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
 
-  Future<void> _verifyOtp() async {
-    if (_verificationId == null) return;
-    final code = _otpController.text.trim();
-    if (code.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LanguageService.instance.t('enterOtp'))),
-      );
-      return;
-    }
-    setState(() => _verifying = true);
+    setState(() => _loggingIn = true);
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
-      final result = await AuthService.instance.verifyOtp(
-        _verificationId!,
-        code,
+      await AuthService.instance.signInWithEmailPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
+
       if (!mounted) return;
 
-      if (result['isNewUser'] == true) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil(RegisterScreen.routeName, (_) => false);
-      } else {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil(HomePage.routeName, (_) => false);
-      }
-    } catch (err) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
+      // Navigate to Home
+      Navigator.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(err.toString())));
+      ).pushNamedAndRemoveUntil(HomePage.routeName, (_) => false);
+    } catch (err) {
+      String message = err.toString();
+      if (err is FirebaseAuthException) {
+        message = '${err.code}: ${err.message}';
+      } else if (err is AuthException) {
+        message = err.message;
+      }
+      messenger.showSnackBar(SnackBar(content: Text('Error: $message')));
     } finally {
       if (mounted) {
-        setState(() => _verifying = false);
+        setState(() => _loggingIn = false);
       }
     }
   }
@@ -269,10 +236,86 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     const Divider(),
-                    const SizedBox(height: 16),
-                    _buildOtpRequestCard(),
                     const SizedBox(height: 24),
-                    if (_codeSent) _buildOtpVerifyCard(),
+
+                    // Email
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        suffixIcon: Icon(Icons.email_outlined),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty)
+                          return 'Email is required';
+                        if (!value.contains('@')) return 'Enter a valid email';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Password
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: !_passwordVisible,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _passwordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () => setState(
+                            () => _passwordVisible = !_passwordVisible,
+                          ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty)
+                          return 'Password is required';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 32),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton(
+                        onPressed: _loggingIn ? null : _login,
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                        ),
+                        child: _loggingIn
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Login',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
                     TextButton(
                       onPressed: () {
                         Navigator.of(
@@ -288,231 +331,6 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildOtpRequestCard() {
-    final lang = LanguageService.instance;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${lang.t('login')} OTP',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _phoneController,
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(
-              labelText: lang.t('mobile'),
-              prefixText: '+91 ',
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return lang.t('enterPhone');
-              }
-              if (value.trim().length != 10) {
-                return 'Enter 10 digit mobile number';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _captchaController,
-                  decoration: InputDecoration(labelText: lang.t('captchaText')),
-                ),
-              ),
-              const SizedBox(width: 12),
-              _buildCaptchaBox(),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _sending ? null : _sendOtp,
-              child: _sending
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(lang.t('sendOtp')),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _sendOtp() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_captcha == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LanguageService.instance.t('captchaNotReady'))),
-      );
-      return;
-    }
-    final captchaText = _captchaController.text.trim();
-    if (captchaText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LanguageService.instance.t('captchaEnter'))),
-      );
-      return;
-    }
-
-    // Sanitize phone number
-    String rawPhone = _phoneController.text.trim();
-    // Remove any non-digit characters
-    rawPhone = rawPhone.replaceAll(RegExp(r'[^0-9]'), '');
-
-    // Handle if user already added 91 or +91 (though regex removed +)
-    if (rawPhone.length > 10 && rawPhone.startsWith('91')) {
-      rawPhone = rawPhone.substring(2);
-    }
-
-    if (rawPhone.length != 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid 10-digit mobile number'),
-        ),
-      );
-      return;
-    }
-
-    final phone = '+91$rawPhone';
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _sending = true);
-
-    try {
-      await AuthService.instance.verifyCaptcha(
-        captchaId: _captcha!.id,
-        text: captchaText,
-      );
-
-      await AuthService.instance.sendOtp(
-        phoneNumber: phone,
-        verificationCompleted: (credential) async {
-          await FirebaseAuth.instance.signInWithCredential(credential);
-        },
-        verificationFailed: (exception) {
-          messenger.showSnackBar(
-            SnackBar(content: Text(exception.message ?? 'Verification failed')),
-          );
-        },
-        codeSent: (verificationId, resendToken) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                '${LanguageService.instance.t('otpSentPrefix')} $phone',
-              ),
-            ),
-          );
-          setState(() {
-            _verificationId = verificationId;
-            _resendToken = resendToken;
-            _codeSent = true;
-            _otpController.clear();
-          });
-        },
-        codeAutoRetrievalTimeout: (_) {},
-        forceResendingToken: _resendToken,
-      );
-    } catch (err) {
-      messenger.showSnackBar(SnackBar(content: Text(err.toString())));
-      _loadCaptcha();
-    } finally {
-      if (mounted) {
-        setState(() => _sending = false);
-      }
-    }
-  }
-
-  Widget _buildCaptchaBox() {
-    return Container(
-      width: 120,
-      height: 64,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade400),
-        color: Colors.grey.shade100,
-      ),
-      child: _captchaLoading
-          ? const Center(child: CircularProgressIndicator())
-          : InkWell(
-              onTap: _loadCaptcha,
-              child: _captcha == null || _captcha!.imageUrl.isEmpty
-                  ? const Center(child: Text('Tap to load'))
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        _captcha!.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            const Center(child: Text('Captcha')),
-                      ),
-                    ),
-            ),
-    );
-  }
-
-  Widget _buildOtpVerifyCard() {
-    final lang = LanguageService.instance;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Column(
-            children: [
-              Text(
-                lang.t('enterOtp'),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _otpController,
-                maxLength: 6,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  counterText: '',
-                  hintText: lang.t('otpPlaceholder'),
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _verifying ? null : _verifyOtp,
-                  child: _verifying
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Verify'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

@@ -19,37 +19,61 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   static const String _grassAsset = 'assets/images/grass.png';
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+
+  // Controllers
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _captchaController = TextEditingController();
-  final _otpController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  String? _selectedState;
+
+  final List<String> _indianStates = [
+    'Andhra Pradesh',
+    'Arunachal Pradesh',
+    'Assam',
+    'Bihar',
+    'Chhattisgarh',
+    'Goa',
+    'Gujarat',
+    'Haryana',
+    'Himachal Pradesh',
+    'Jharkhand',
+    'Karnataka',
+    'Kerala',
+    'Madhya Pradesh',
+    'Maharashtra',
+    'Manipur',
+    'Meghalaya',
+    'Mizoram',
+    'Nagaland',
+    'Odisha',
+    'Punjab',
+    'Rajasthan',
+    'Sikkim',
+    'Tamil Nadu',
+    'Telangana',
+    'Tripura',
+    'Uttar Pradesh',
+    'Uttarakhand',
+    'West Bengal',
+    'Andaman and Nicobar Islands',
+    'Chandigarh',
+    'Dadra and Nagar Haveli and Daman and Diu',
+    'Delhi',
+    'Jammu and Kashmir',
+    'Ladakh',
+    'Lakshadweep',
+    'Puducherry',
+  ];
 
   bool _submitting = false;
   bool _cachedGrass = false;
-  CaptchaData? _captcha;
-  bool _captchaLoading = false;
-
-  // OTP State
-  String? _verificationId;
-  int? _resendToken;
-  bool _codeSent = false;
+  bool _passwordVisible = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCaptcha();
-    _checkCurrentUser();
-  }
-
-  void _checkCurrentUser() {
-    final user = AuthService.instance.currentUser;
-    if (user != null && user.phoneNumber != null) {
-      String phone = user.phoneNumber!;
-      if (phone.startsWith('+91')) {
-        phone = phone.substring(3);
-      }
-      _phoneController.text = phone;
-    }
   }
 
   @override
@@ -63,166 +87,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _usernameController.dispose();
+    _emailController.dispose();
     _phoneController.dispose();
-    _captchaController.dispose();
-    _otpController.dispose();
-    super.dispose();
-  }
 
-  Future<void> _loadCaptcha() async {
-    setState(() => _captchaLoading = true);
-    try {
-      final captcha = await AuthService.instance.fetchCaptcha();
-      if (!mounted) return;
-      setState(() {
-        _captcha = captcha;
-        _captchaController.clear();
-      });
-    } catch (err) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Captcha failed: $err')));
-    } finally {
-      if (mounted) {
-        setState(() => _captchaLoading = false);
-      }
-    }
+    _passwordController.dispose();
+    super.dispose();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Check if user is already authenticated
-    final currentUser = AuthService.instance.currentUser;
-
-    if (_captcha == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Captcha not ready yet')));
-      return;
-    }
-    final captchaText = _captchaController.text.trim();
-    if (captchaText.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Enter captcha text')));
-      return;
-    }
-
-    // Sanitize phone number
-    String rawPhone = _phoneController.text.trim();
-    rawPhone = rawPhone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (rawPhone.length > 10 && rawPhone.startsWith('91')) {
-      rawPhone = rawPhone.substring(2);
-    }
-
-    if (rawPhone.length != 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid 10-digit mobile number'),
-        ),
-      );
-      return;
-    }
-
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
-    final lang = LanguageService.instance;
 
     try {
-      // If user is NOT logged in, we need to do OTP flow
-      if (currentUser == null) {
-        if (!_codeSent) {
-          // Step 1: Send OTP
-          await AuthService.instance.verifyCaptcha(
-            captchaId: _captcha!.id,
-            text: captchaText,
-          );
+      // 1. Create User in Auth
+      final credential = await AuthService.instance.signUpWithEmailPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-          await AuthService.instance.sendOtp(
-            phoneNumber: '+91$rawPhone',
-            verificationCompleted: (credential) async {
-              // Auto-verification (rare but possible)
-              await FirebaseAuth.instance.signInWithCredential(credential);
-              // Proceed to register
-              if (mounted) _submit();
-            },
-            verificationFailed: (e) {
-              messenger.showSnackBar(
-                SnackBar(content: Text(e.message ?? 'Verification failed')),
-              );
-              setState(() => _submitting = false);
-            },
-            codeSent: (verificationId, resendToken) {
-              setState(() {
-                _verificationId = verificationId;
-                _resendToken = resendToken;
-                _codeSent = true;
-                _submitting = false;
-              });
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text('${lang.t('otpSentPrefix')} +91$rawPhone'),
-                ),
-              );
-            },
-            codeAutoRetrievalTimeout: (_) {},
-            forceResendingToken: _resendToken,
-          );
-          return; // Wait for user to enter OTP
-        } else {
-          // Step 2: Verify OTP
-          final otp = _otpController.text.trim();
-          if (otp.length != 6) {
-            messenger.showSnackBar(SnackBar(content: Text(lang.t('enterOtp'))));
-            setState(() => _submitting = false);
-            return;
-          }
+      final user = credential.user;
+      if (user == null) throw AuthException('Registration failed');
 
-          await AuthService.instance.verifyOtp(_verificationId!, otp);
-
-          // Wait for auth state to propagate
-          int retries = 0;
-          while (AuthService.instance.currentUser == null && retries < 10) {
-            await Future.delayed(const Duration(milliseconds: 200));
-            retries++;
-          }
-
-          // Now user is logged in, proceed to register logic below
-        }
-      } else {
-        // User is logged in, just verify captcha if not already done in OTP step?
-        // Actually, if they are logged in, we might skip captcha or just verify it again.
-        // Let's verify it again to be safe/consistent with existing flow.
-        await AuthService.instance.verifyCaptcha(
-          captchaId: _captcha!.id,
-          text: captchaText,
-        );
-      }
-
-      // Step 3: Register User Data
+      // 2. Save User Details in Firestore
       await AuthService.instance.registerUser(
-        name: _nameController.text.trim(),
-        phoneNumber: '+91$rawPhone',
+        uid: user.uid,
+        name: _usernameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        state: _selectedState!,
       );
 
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Registration submitted!')),
+        SnackBar(content: Text('Registration successful!')),
       );
-      // Navigate to Home instead of Login, since they are now logged in
-      Navigator.of(context).pushReplacementNamed(
-        PhoneLoginScreen.routeName,
-      ); // Or Home? User requested "login/register work", usually register -> login or home.
-      // The original code went to PhoneLoginScreen. Let's keep it or maybe go to Home if they are logged in?
-      // If they just registered, they are logged in. Sending them to login screen might be confusing if they are already logged in.
-      // But let's stick to original flow: Register -> Login Screen (maybe to force re-login or just as a success page).
-      // Wait, if they are logged in, going to PhoneLoginScreen might auto-redirect to Home if PhoneLoginScreen checks auth.
-      // Let's send them to Home if they are logged in.
-      // Actually, let's stick to the requested behavior: "make it work".
-      // Original code: Navigator.of(context).pushReplacementNamed(PhoneLoginScreen.routeName);
+
+      // Navigate to Home
+      Navigator.of(context).pushReplacementNamed('/');
     } catch (err) {
       String message = err.toString();
       if (err is FirebaseAuthException) {
@@ -231,7 +135,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         message = err.message;
       }
       messenger.showSnackBar(SnackBar(content: Text('Error: $message')));
-      _loadCaptcha();
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -370,17 +273,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildRegisterCard() {
     final lang = LanguageService.instance;
-    final currentUser = AuthService.instance.currentUser;
-    // Determine button text
-    String buttonText = lang.t('registerCta');
-    if (currentUser == null) {
-      if (_codeSent) {
-        buttonText =
-            'Verify & Register'; // TODO: Add translation key if needed, or use hardcoded for now
-      } else {
-        buttonText = lang.t('sendOtp');
-      }
-    }
 
     return Center(
       child: ConstrainedBox(
@@ -407,97 +299,156 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: 16),
                     const Divider(),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade300),
+                    const SizedBox(height: 24),
+
+                    // Username
+                    TextFormField(
+                      controller: _usernameController,
+                      decoration: InputDecoration(
+                        labelText: 'Username',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: InputDecoration(
-                              labelText: lang.t('fullName'),
-                            ),
-                            validator: (value) =>
-                                value == null || value.trim().isEmpty
-                                ? 'Required'
-                                : null,
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Username is required'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Email
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        suffixIcon: Icon(Icons.email_outlined),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty)
+                          return 'Email is required';
+                        if (!value.contains('@')) return 'Enter a valid email';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Mobile Number
+                    TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: 'Mobile Number',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty)
+                          return 'Mobile number is required';
+                        // Simple validation, just length
+                        if (value.length < 10)
+                          return 'Enter a valid mobile number';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // State
+                    DropdownButtonFormField<String>(
+                      value: _selectedState,
+                      decoration: InputDecoration(
+                        labelText: 'State',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: _indianStates.map((state) {
+                        return DropdownMenuItem(
+                          value: state,
+                          child: Text(state),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedState = value;
+                        });
+                      },
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'State is required'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Password
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: !_passwordVisible,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _passwordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                           ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _phoneController,
-                            keyboardType: TextInputType.phone,
-                            // Allow editing if not logged in
-                            readOnly: currentUser != null,
-                            decoration: InputDecoration(
-                              labelText: lang.t('mobile'),
-                              prefixText: '+91 ',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return lang.t('enterPhone');
-                              }
-                              if (value.trim().length != 10) {
-                                return 'Enter 10 digit mobile number';
-                              }
-                              return null;
-                            },
+                          onPressed: () => setState(
+                            () => _passwordVisible = !_passwordVisible,
                           ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _captchaController,
-                                  decoration: InputDecoration(
-                                    labelText: lang.t('captchaText'),
-                                  ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty)
+                          return 'Password is required';
+                        if (value.length < 6)
+                          return 'Password must be at least 6 characters';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 32),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton(
+                        onPressed: _submitting ? null : _submit,
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                        ),
+                        child: _submitting
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
                                 ),
+                              )
+                            : const Text(
+                                'Register',
+                                style: TextStyle(fontSize: 16),
                               ),
-                              const SizedBox(width: 12),
-                              _buildCaptchaBox(),
-                            ],
-                          ),
-                          if (_codeSent) ...[
-                            const SizedBox(height: 16),
-                            TextField(
-                              controller: _otpController,
-                              maxLength: 6,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: lang.t('enterOtp'),
-                                counterText: '',
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _submitting ? null : _submit,
-                              child: _submitting
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Text(buttonText),
-                            ),
-                          ),
-                        ],
                       ),
                     ),
+
+                    const SizedBox(height: 16),
                     TextButton(
                       onPressed: () {
                         Navigator.of(
                           context,
-                        ).pushReplacementNamed(PhoneLoginScreen.routeName);
+                        ).pushReplacementNamed(LoginScreen.routeName);
                       },
                       child: Text(lang.t('alreadyRegistered')),
                     ),
@@ -508,34 +459,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildCaptchaBox() {
-    return Container(
-      width: 120,
-      height: 64,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade400),
-        color: Colors.grey.shade100,
-      ),
-      child: _captchaLoading
-          ? const Center(child: CircularProgressIndicator())
-          : InkWell(
-              onTap: _loadCaptcha,
-              child: _captcha == null || _captcha!.imageUrl.isEmpty
-                  ? const Center(child: Text('Tap to load'))
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        _captcha!.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            const Center(child: Text('Captcha')),
-                      ),
-                    ),
-            ),
     );
   }
 }

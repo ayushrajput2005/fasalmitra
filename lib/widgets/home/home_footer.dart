@@ -30,7 +30,7 @@ class HomeFooter extends StatelessWidget {
 
     return Container(
       color: footerColor,
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isWide = constraints.maxWidth > 800;
@@ -163,7 +163,7 @@ class HomeFooter extends StatelessWidget {
     return Column(
       crossAxisAlignment: isWide
           ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
+          : CrossAxisAlignment.center,
       children: [
         Container(
           padding: const EdgeInsets.all(8),
@@ -173,35 +173,43 @@ class HomeFooter extends StatelessWidget {
           ),
           child: Image.asset(
             'assets/images/digital_india.png',
-            height: 80, // Scaled up
+            height: 60,
             fit: BoxFit.contain,
           ),
         ),
         const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Image.asset(
-            'assets/images/emblem.png',
-            height: 100, // Scaled up
-            fit: BoxFit.contain,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Image.asset(
-            'assets/images/sih.png',
-            height: 80,
-            fit: BoxFit.contain,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: isWide
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Image.asset(
+                'assets/images/emblem.png',
+                height: 70,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Image.asset(
+                'assets/images/sih.png',
+                height: 70,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ],
         ),
       ],
     );

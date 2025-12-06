@@ -69,7 +69,7 @@ class FasalMitraApp extends StatelessWidget {
           ),
           home: const HomePage(),
           routes: {
-            PhoneLoginScreen.routeName: (context) => const PhoneLoginScreen(),
+            LoginScreen.routeName: (context) => const LoginScreen(),
             RegisterScreen.routeName: (context) => const RegisterScreen(),
             HomePage.routeName: (context) => const HomePage(),
             CreateListingScreen.routeName: (context) =>

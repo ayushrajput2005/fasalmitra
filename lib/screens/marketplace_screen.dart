@@ -293,7 +293,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   padding: const EdgeInsets.all(16),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 280,
-                    childAspectRatio: 0.72,
+                    childAspectRatio:
+                        0.55, // Adjusted back up since card is more compact
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                   ),

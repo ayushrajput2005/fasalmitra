@@ -32,6 +32,43 @@ class HomeNavbar extends StatelessWidget {
         child: Row(
           children: [
             // Logo
+            // Logo
+            ColorFiltered(
+              colorFilter: const ColorFilter.matrix(<double>[
+                -1,
+                0,
+                0,
+                0,
+                255,
+                0,
+                -1,
+                0,
+                0,
+                255,
+                0,
+                0,
+                -1,
+                0,
+                255,
+                0,
+                0,
+                0,
+                1,
+                0,
+              ]),
+              child: Image.asset(
+                'assets/images/gov_of_india.png',
+                height: 70,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              height: 54,
+              width: 1,
+              color: Colors.white.withOpacity(0.3),
+            ),
+            const SizedBox(width: 12),
             Text(
               'FasalMitra',
               style: theme.textTheme.titleLarge?.copyWith(

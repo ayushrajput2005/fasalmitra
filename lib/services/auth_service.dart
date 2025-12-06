@@ -33,54 +33,39 @@ class AuthService {
   Map<String, dynamic>? get cachedUser => _cachedUser;
   CaptchaData? get currentCaptcha => _captcha;
 
-  Future<void> sendOtp({
-    required String phoneNumber,
-    required PhoneVerificationCompleted verificationCompleted,
-    required PhoneVerificationFailed verificationFailed,
-    required PhoneCodeSent codeSent,
-    required PhoneCodeAutoRetrievalTimeout codeAutoRetrievalTimeout,
-    int? forceResendingToken,
+  Future<UserCredential> signUpWithEmailPassword({
+    required String email,
+    required String password,
   }) async {
-    await _firebaseAuth.verifyPhoneNumber(
-      phoneNumber: phoneNumber,
-      verificationCompleted: verificationCompleted,
-      verificationFailed: verificationFailed,
-      codeSent: codeSent,
-      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
-      forceResendingToken: forceResendingToken,
-    );
+    try {
+      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return credential;
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(e.message ?? 'Registration failed');
+    }
   }
 
-  Future<Map<String, dynamic>> verifyOtp(
-    String verificationId,
-    String smsCode,
-  ) async {
+  Future<UserCredential> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
     try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: smsCode,
-      );
-      final userCredential = await _firebaseAuth.signInWithCredential(
-        credential,
+      final credential = await _firebaseAuth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
       );
 
-      final user = userCredential.user;
-      if (user == null) {
-        throw AuthException('Authentication failed');
+      // Cache user data
+      if (credential.user != null) {
+        await fetchProfile();
       }
 
-      // Check if user exists in Firestore
-      final userDoc = await _firestore.collection('users').doc(user.uid).get();
-
-      if (userDoc.exists) {
-        _cachedUser = userDoc.data();
-        return _cachedUser!;
-      } else {
-        // New user, return basic info so they can register
-        return {'id': user.uid, 'phone': user.phoneNumber, 'isNewUser': true};
-      }
-    } on FirebaseAuthException catch (error) {
-      throw AuthException(error.message ?? 'Invalid OTP');
+      return credential;
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(e.message ?? 'Login failed');
     }
   }
 
@@ -93,7 +78,6 @@ class AuthService {
     try {
       final doc = await _firestore.collection('users').doc(user.uid).get();
       if (!doc.exists) {
-        // Should ideally not happen if registered, but handle gracefully
         return {'id': user.uid, 'phone': user.phoneNumber};
       }
       _cachedUser = doc.data();
@@ -103,49 +87,24 @@ class AuthService {
     }
   }
 
-  // Mock captcha for now as it was backend based
-  Future<CaptchaData> fetchCaptcha() async {
-    // In a real Firebase app, you might use reCAPTCHA or just skip this for phone auth
-    // Returning a dummy captcha to satisfy existing UI flow
-    await Future.delayed(const Duration(milliseconds: 500));
-    final captcha = CaptchaData(
-      id: 'dummy_captcha',
-      imageUrl: 'https://dummyimage.com/150x50/000/fff&text=1234',
-    );
-    _captcha = captcha;
-    return captcha;
-  }
-
-  Future<void> verifyCaptcha({
-    required String captchaId,
-    required String text,
-  }) async {
-    // Mock verification
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (text != '1234') {
-      // For demo purposes, accept anything or simple check
-      // throw AuthException('Invalid Captcha');
-    }
-  }
-
   Future<void> registerUser({
+    required String uid,
     required String name,
-    required String phoneNumber,
+    required String email,
+    required String phone,
+    required String state,
   }) async {
-    final user = _firebaseAuth.currentUser;
-    if (user == null) {
-      throw AuthException('No authenticated user found');
-    }
-
     final userData = {
-      'id': user.uid,
+      'id': uid,
       'name': name,
-      'phone': phoneNumber, // or user.phoneNumber
+      'email': email,
+      'phone': phone,
+      'state': state,
       'role': 'farmer', // Default role
       'createdAt': FieldValue.serverTimestamp(),
     };
 
-    await _firestore.collection('users').doc(user.uid).set(userData);
+    await _firestore.collection('users').doc(uid).set(userData);
     _cachedUser = userData;
   }
 

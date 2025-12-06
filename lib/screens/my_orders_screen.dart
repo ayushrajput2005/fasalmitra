@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fasalmitra/widgets/orders/order_card.dart';
 
 class MyOrdersScreen extends StatelessWidget {
   const MyOrdersScreen({super.key});
@@ -7,27 +8,65 @@ class MyOrdersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dummy Data matching the image
+    final orders = [
+      {
+        'id': '6',
+        'product': 'soymeal',
+        'amount': '₹150',
+        'status': 'DEPOSITED',
+        'date': '12/3/2025',
+      },
+      {
+        'id': '3',
+        'product': 'sunflower',
+        'amount': '₹12000',
+        'status': 'DEPOSITED',
+        'date': '12/2/2025',
+      },
+      {
+        'id': '7',
+        'product': 'Groundnut Seeds',
+        'amount': '₹3000',
+        'status': 'PENDING',
+        'date': '12/4/2025',
+      },
+    ];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('My Orders')),
+      backgroundColor:
+          Colors.grey.shade50, // Light background to make white cards pop
+      appBar: AppBar(
+        title: const Text('My Orders'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
+      ),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: 5,
+        itemCount: orders.length,
         itemBuilder: (context, index) {
-          return Card(
-            margin: const EdgeInsets.only(bottom: 16),
-            child: ListTile(
-              leading: Container(
-                width: 50,
-                height: 50,
-                color: Colors.grey.shade200,
-                child: const Icon(Icons.shopping_bag),
-              ),
-              title: Text('Order #${1000 + index}'),
-              subtitle: Text(
-                'Status: ${index == 0 ? "Processing" : "Delivered"}',
-              ),
-              trailing: Text('₹${(index + 1) * 500}'),
-            ),
+          final order = orders[index];
+          return OrderCard(
+            orderId: order['id']!,
+            productName: order['product']!,
+            amount: order['amount']!,
+            status: order['status']!,
+            date: order['date']!,
+            onReceived: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Order #${order['id']} marked as Received'),
+                ),
+              );
+            },
+            onNotReceived: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Reported issue for Order #${order['id']}'),
+                ),
+              );
+            },
           );
         },
       ),

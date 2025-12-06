@@ -25,7 +25,7 @@ class _AccountScreenState extends State<AccountScreen> {
     final user = AuthService.instance.cachedUser;
     if (user == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).pushReplacementNamed(PhoneLoginScreen.routeName);
+        Navigator.of(context).pushReplacementNamed(LoginScreen.routeName);
       });
     }
   }

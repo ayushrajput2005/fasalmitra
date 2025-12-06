@@ -15,13 +15,17 @@ class ListingData {
     this.sellerName,
     this.farmerProfileImage,
     this.category,
+    this.type,
     this.rating,
     this.certificateGrade,
+    this.certificateUrl,
     this.isCertified = false,
     this.processingDate,
     this.quantity,
     this.quantityUnit,
     this.distance,
+    this.location,
+    this.quality,
   });
 
   factory ListingData.fromJson(Map<String, dynamic> json) {
@@ -40,8 +44,10 @@ class ListingData {
       sellerName: json['sellerName'] as String?,
       farmerProfileImage: json['farmerProfileImage'] as String?,
       category: json['category'] as String?,
+      type: json['type'] as String?,
       rating: (json['rating'] as num?)?.toDouble(),
       certificateGrade: json['certificateGrade'] as String?,
+      certificateUrl: json['certificateUrl'] as String?,
       isCertified: json['isCertified'] as bool? ?? false,
       processingDate: json['processingDate'] != null
           ? DateTime.parse(json['processingDate'] as String)
@@ -49,6 +55,8 @@ class ListingData {
       quantity: (json['quantity'] as num?)?.toDouble(),
       quantityUnit: json['quantityUnit'] as String?,
       distance: (json['distance'] as num?)?.toDouble(),
+      location: json['location'] as String?,
+      quality: json['quality'] as String?,
     );
   }
 
@@ -62,13 +70,17 @@ class ListingData {
   final String? sellerName;
   final String? farmerProfileImage;
   final String? category;
+  final String? type; // New field for "Type" shown in image
   final double? rating; // Rating out of 5
   final String? certificateGrade; // e.g., "Grade A", "Organic"
+  final String? certificateUrl; // New field for certificate link
   final bool isCertified;
   final DateTime? processingDate;
   final double? quantity;
   final String? quantityUnit;
   final double? distance; // Distance in km from user
+  final String? location; // New field for location
+  final String? quality; // New field for quality
 }
 
 class ListingService {
@@ -124,45 +136,128 @@ class ListingService {
     DateTime? dateTo,
   }) async {
     try {
+      // Firestore logic disabled for debugging
+      /*
       Query query = _firestore.collection('products');
 
-      // Apply category filter
       if (categoryFilter != null && categoryFilter.isNotEmpty) {
         query = query.where('category', isEqualTo: categoryFilter);
       }
-
-      // Apply date filter
       if (dateFrom != null) {
-        query = query.where(
-          'processingDate',
-          isGreaterThanOrEqualTo: dateFrom.toIso8601String(),
-        );
+        query = query.where('processingDate', isGreaterThanOrEqualTo: dateFrom.toIso8601String());
       }
       if (dateTo != null) {
-        query = query.where(
-          'processingDate',
-          isLessThanOrEqualTo: dateTo.toIso8601String(),
-        );
+        query = query.where('processingDate', isLessThanOrEqualTo: dateTo.toIso8601String());
       }
 
-      // Execute query
-      final querySnapshot = await query.get();
-
+      final querySnapshot = await query.get().timeout(const Duration(seconds: 2));
       var listings = querySnapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
         return ListingData.fromJson(data);
       }).toList();
+      */
 
-      // Apply search filter (client-side for basic search)
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        final q = searchQuery.toLowerCase();
-        listings = listings
-            .where((l) => l.title.toLowerCase().contains(q))
+      List<ListingData> listings = [];
+
+      // Add dummy listings
+      final dummyListings = [
+        ListingData(
+          id: 'dummy-1',
+          title: 'soymeal',
+          price: 15,
+          priceUnit: '/kg',
+          type: 'byproduct',
+          category: 'Seeds',
+          sellerName: 'srujanx',
+          imageUrls: ['assets/images/soymeal.png'],
+          quantity: 10,
+          quantityUnit: 'kg',
+          location: 'maharashtra',
+          quality: 'good',
+          certificateUrl: 'https://example.com/cert1',
+          processingDate: DateTime.now().subtract(const Duration(days: 1)),
+        ),
+        ListingData(
+          id: 'dummy-2',
+          title: 'Groundnut Seeds',
+          price: 60,
+          priceUnit: '/kg',
+          type: 'Oil Seeds',
+          category: 'Seeds',
+          sellerName: 'Ramesh Patel',
+          imageUrls: ['assets/images/soymeal.png'],
+          quantity: 50,
+          quantityUnit: 'kg',
+          location: 'Gujarat',
+          quality: 'Premium',
+          certificateUrl: 'https://example.com/cert2',
+          processingDate: DateTime.now().subtract(const Duration(days: 2)),
+        ),
+        ListingData(
+          id: 'dummy-3',
+          title: 'Sesame Seeds',
+          price: 120,
+          priceUnit: '/kg',
+          type: 'Oil Seeds',
+          category: 'Seeds',
+          sellerName: 'Anita Devi',
+          imageUrls: ['assets/images/soymeal.png'],
+          quantity: 25,
+          quantityUnit: 'kg',
+          location: 'Rajasthan',
+          quality: 'Grade A',
+          certificateGrade: 'Organic',
+          processingDate: DateTime.now().subtract(const Duration(days: 5)),
+        ),
+        ListingData(
+          id: 'dummy-4',
+          title: 'Mustard Seeds',
+          price: 45,
+          priceUnit: '/kg',
+          type: 'Oil Seeds',
+          category: 'Seeds',
+          sellerName: 'Kisan Co-op',
+          imageUrls: ['assets/images/soymeal.png'],
+          quantity: 100,
+          quantityUnit: 'kg',
+          location: 'Punjab',
+          quality: 'Standard',
+          certificateUrl: 'https://example.com/cert4',
+          processingDate: DateTime.now().subtract(const Duration(days: 10)),
+        ),
+      ];
+
+      // Filter dummy listings based on arguments
+      var filteredDummies = dummyListings;
+
+      if (categoryFilter != null && categoryFilter.isNotEmpty) {
+        filteredDummies = filteredDummies
+            .where((l) => l.category == categoryFilter)
             .toList();
       }
 
-      // Apply sorting (client-side to avoid complex composite indexes for now)
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        filteredDummies = filteredDummies
+            .where(
+              (l) => l.title.toLowerCase().contains(searchQuery.toLowerCase()),
+            )
+            .toList();
+      }
+
+      if (dateFrom != null) {
+        filteredDummies = filteredDummies
+            .where(
+              (l) =>
+                  l.processingDate != null &&
+                  l.processingDate!.isAfter(dateFrom),
+            )
+            .toList();
+      }
+
+      listings.addAll(filteredDummies);
+
+      // Apply sorting
       switch (sortBy) {
         case 'distance':
           listings.sort((a, b) => (a.distance ?? 0).compareTo(b.distance ?? 0));
@@ -181,7 +276,6 @@ class ListingService {
           });
           break;
       }
-
       return listings;
     } catch (e) {
       print('Error fetching marketplace listings: $e');
