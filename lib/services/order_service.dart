@@ -1,5 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fasalmitra/services/api.dart';
+import 'package:fasalmitra/services/auth_service.dart';
 import 'package:fasalmitra/services/cart_service.dart';
 
 class OrderService {
@@ -7,80 +7,94 @@ class OrderService {
 
   static final OrderService instance = OrderService._();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
   Future<void> createOrder(List<CartItem> items, double totalAmount) async {
-    final user = _auth.currentUser;
-    if (user == null)
+    final token = AuthService.instance.token;
+    if (token == null) {
       throw Exception('User must be logged in to place an order');
+    }
 
-    // Extract unique seller IDs
-    final sellerIds = items
-        .map((item) => item.listing.sellerId)
-        .where((id) => id != null)
-        .toSet()
-        .toList();
+    // API supports buying one product at a time via /buy/
+    // We will loop through items and buy them.
+    // Note: Transaction consistency? If one fails?
+    // For now, we attempt all.
+    List<String> errors = [];
 
-    final orderData = {
-      'buyerId': user.uid,
-      'buyerName': user.displayName ?? user.phoneNumber ?? 'Unknown',
-      'items': items.map((item) => item.toJson()).toList(),
-      'totalAmount': totalAmount,
-      'status': 'pending',
-      'sellerIds': sellerIds,
-      'createdAt': FieldValue.serverTimestamp(),
-    };
+    for (var item in items) {
+      try {
+        await ApiService.instance.post(
+          '/buy/',
+          token: token,
+          body: {'product_id': int.tryParse(item.listing.id) ?? 0},
+        );
+      } catch (e) {
+        errors.add('Failed to buy ${item.listing.title}: $e');
+      }
+    }
 
-    await _firestore.collection('orders').add(orderData);
+    if (errors.isNotEmpty) {
+      throw Exception(errors.join('\n'));
+    }
   }
 
   Future<List<Map<String, dynamic>>> getMyOrders() async {
-    final user = _auth.currentUser;
-    if (user == null) return [];
+    final token = AuthService.instance.token;
+    if (token == null) return [];
 
     try {
-      final querySnapshot = await _firestore
-          .collection('orders')
-          .where('buyerId', isEqualTo: user.uid)
-          .orderBy('createdAt', descending: true)
-          .get();
+      final response = await ApiService.instance.get('/orders/', token: token);
 
-      return querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return data;
-      }).toList();
+      if (response['success'] != null) {
+        final list = response['success']['body'] as List;
+        return list.map((item) {
+          return {
+            'id': item['id'].toString(),
+            'product': item['product_name'] ?? 'Unknown',
+            'amount': '₹${item['amount']}',
+            'status': item['status'],
+            'date': item['date'], // Formatted?
+          };
+        }).toList();
+      }
+      return [];
     } catch (e) {
       print('Error fetching orders: $e');
       return [];
     }
   }
 
-  Future<List<Map<String, dynamic>>> getOrdersForFarmer(String farmerId) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('orders')
-          .where('sellerIds', arrayContains: farmerId)
-          .orderBy('createdAt', descending: true)
-          .get();
+  Future<void> confirmReceipt(String orderId) async {
+    final token = AuthService.instance.token;
+    if (token == null) return;
 
-      return querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return data;
-      }).toList();
-    } catch (e) {
-      print('Error fetching farmer orders: $e');
-      return [];
-    }
+    await ApiService.instance.post(
+      '/confirm/',
+      token: token,
+      body: {'order_id': int.tryParse(orderId) ?? 0},
+    );
+  }
+
+  Future<void> requestRefund(String orderId) async {
+    final token = AuthService.instance.token;
+    if (token == null) return;
+
+    await ApiService.instance.post(
+      '/refund/',
+      token: token,
+      body: {'order_id': int.tryParse(orderId) ?? 0},
+    );
+  }
+
+  // Deprecated / Unused in new flow?
+  Future<List<Map<String, dynamic>>> getOrdersForFarmer(String farmerId) async {
+    return [];
   }
 
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
-    // In a real app, check if the user is authorized (seller or admin)
-    await _firestore.collection('orders').doc(orderId).update({
-      'status': newStatus,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    // mapped to confirm/refund? Use specific methods instead.
+    if (newStatus == 'COMPLETED') {
+      await confirmReceipt(orderId);
+    } else if (newStatus == 'REFUNDED') {
+      await requestRefund(orderId);
+    }
   }
 }

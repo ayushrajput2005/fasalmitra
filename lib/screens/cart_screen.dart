@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fasalmitra/services/cart_service.dart';
+import 'package:fasalmitra/services/order_service.dart';
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
@@ -190,12 +191,29 @@ class CartScreen extends StatelessWidget {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Checkout feature coming soon'),
-                              ),
-                            );
+                          onPressed: () async {
+                            try {
+                              await OrderService.instance.createOrder(
+                                CartService.instance.items,
+                                CartService.instance.totalPrice,
+                              );
+
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Order placed successfully!'),
+                                  ),
+                                );
+                                CartService.instance.clearCart();
+                                Navigator.of(context).pushNamed('/my-orders');
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Order failed: $e')),
+                                );
+                              }
+                            }
                           },
                           child: const Text('Checkout'),
                         ),

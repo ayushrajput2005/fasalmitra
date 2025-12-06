@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fasalmitra/services/order_service.dart';
 import 'package:fasalmitra/widgets/orders/order_card.dart';
 
 class MyOrdersScreen extends StatelessWidget {
@@ -8,63 +9,76 @@ class MyOrdersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dummy Data matching the image
-    final orders = [
-      {
-        'id': '6',
-        'product': 'soymeal',
-        'amount': '₹150',
-        'status': 'DEPOSITED',
-        'date': '12/3/2025',
-      },
-      {
-        'id': '3',
-        'product': 'sunflower',
-        'amount': '₹12000',
-        'status': 'DEPOSITED',
-        'date': '12/2/2025',
-      },
-      {
-        'id': '7',
-        'product': 'Groundnut Seeds',
-        'amount': '₹3000',
-        'status': 'PENDING',
-        'date': '12/4/2025',
-      },
-    ];
-
     return Scaffold(
-      backgroundColor:
-          Colors.grey.shade50, // Light background to make white cards pop
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text('My Orders'),
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: orders.length,
-        itemBuilder: (context, index) {
-          final order = orders[index];
-          return OrderCard(
-            orderId: order['id']!,
-            productName: order['product']!,
-            amount: order['amount']!,
-            status: order['status']!,
-            date: order['date']!,
-            onReceived: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Order #${order['id']} marked as Received'),
-                ),
-              );
-            },
-            onNotReceived: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Reported issue for Order #${order['id']}'),
-                ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: OrderService.instance.getMyOrders(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final orders = snapshot.data ?? [];
+
+          if (orders.isEmpty) {
+            return const Center(child: Text('No orders found'));
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: orders.length,
+            itemBuilder: (context, index) {
+              final order = orders[index];
+              return OrderCard(
+                orderId: order['id']!,
+                productName: order['product']!.toString(),
+                amount: order['amount']!.toString(),
+                status: order['status']!.toString(),
+                date: order['date']!.toString(),
+                onReceived: () async {
+                  try {
+                    await OrderService.instance.confirmReceipt(order['id']!);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Order #${order['id']} Confirmed'),
+                      ),
+                    );
+                    // Ideally refresh UI
+                    (context as Element)
+                        .markNeedsBuild(); // Hacky force rebuild or use stateful
+                  } catch (e) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                },
+                onNotReceived: () async {
+                  // Request refund logic? or just report?
+                  // Assuming Request Refund is the action here or we map it to refund
+                  try {
+                    await OrderService.instance.requestRefund(order['id']!);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Refund requested for Order #${order['id']}',
+                        ),
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                },
               );
             },
           );

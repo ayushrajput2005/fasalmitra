@@ -1,0 +1,615 @@
+{
+    "base_url": "http://localhost:8000/api",
+    "authentication": {
+        "type": "JWT",
+        "header": "Authorization",
+        "format": "Bearer <token>",
+        "description": "Most endpoints require JWT token in Authorization header. Token is obtained from login endpoint."
+    },
+    "endpoints": [
+        {
+            "name": "User Registration",
+            "method": "POST",
+            "path": "/register/",
+            "authentication_required": false,
+            "description": "Register a new user. Automatically creates a blockchain wallet and premints 10000 INR tokens.",
+            "request": {
+                "content_type": "application/json",
+                "body": {
+                    "username": "string (required)",
+                    "email": "string (required)",
+                    "password": "string (required)",
+                    "mobile_no": "string (required)",
+                    "state": "string (optional)"
+                },
+                "example": {
+                    "username": "farmer123",
+                    "email": "farmer@example.com",
+                    "password": "securepass123",
+                    "mobile_no": "9876543210",
+                    "state": "Karnataka"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": {
+                        "message": "User registered successfully"
+                    }
+                },
+                "error": {
+                    "status": 400,
+                    "body": {
+                        "error": "Username already exists | email already exists | All fields required"
+                    }
+                }
+            }
+        },
+        {
+            "name": "User Login",
+            "method": "POST",
+            "path": "/login/",
+            "authentication_required": false,
+            "description": "Login with email and password to receive JWT token.",
+            "request": {
+                "content_type": "application/json",
+                "body": {
+                    "email": "string (required)",
+                    "password": "string (required)"
+                },
+                "example": {
+                    "email": "farmer@example.com",
+                    "password": "securepass123"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": {
+                        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "username": "farmer123"
+                    }
+                },
+                "error": {
+                    "status": 400,
+                    "body": {
+                        "error": "Invalid credentials"
+                    }
+                }
+            }
+        },
+        {
+            "name": "User Profile",
+            "method": "GET",
+            "path": "/profile/",
+            "authentication_required": true,
+            "description": "Get current user's profile information including wallet address and token balance.",
+            "request": {
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": {
+                        "username": "farmer123",
+                        "email": "farmer@example.com",
+                        "mobile_no": "9876543210",
+                        "state": "Karnataka",
+                        "token_balance": "10000.00"
+                    }
+                }
+            }
+        },
+        {
+            "name": "Logout",
+            "method": "POST",
+            "path": "/logout/",
+            "authentication_required": false,
+            "description": "Logout endpoint (handled on client side by removing token).",
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": {
+                        "message": "Logout handled on client side"
+                    }
+                }
+            }
+        },
+        {
+            "name": "Create Product",
+            "method": "POST",
+            "path": "/create/",
+            "authentication_required": true,
+            "description": "Create a new product listing (seed or byproduct).",
+            "request": {
+                "content_type": "multipart/form-data",
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                },
+                "body": {
+                    "type": "string (required) - 'seeds' or 'byproduct'",
+                    "product_name": "string (required)",
+                    "date_of_listing": "date (required) - YYYY-MM-DD format",
+                    "amount_kg": "decimal (required) - quantity in kg",
+                    "market_price_per_kg_inr": "decimal (required) - price per kg in INR",
+                    "certificate": "file (optional) - PDF/image file",
+                    "image": "file (optional) - product image",
+                    "location": "string (optional)",
+                    "quality": "string (optional) - 'good', 'mid', or 'bad'"
+                },
+                "example": {
+                    "type": "seeds",
+                    "product_name": "Wheat Seeds",
+                    "date_of_listing": "2025-12-06",
+                    "amount_kg": "100.50",
+                    "market_price_per_kg_inr": "45.00",
+                    "location": "Bangalore",
+                    "quality": "good"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 201,
+                    "body": {
+                        "message": "Product stored successfully",
+                        "product_type": "seeds",
+                        "product_name": "Wheat Seeds",
+                        "date_of_listing": "2025-12-06",
+                        "certification_file": "/media/certificates/cert.pdf",
+                        "amount_available_kg": "100.50",
+                        "price_per_kg_inr": "45.00",
+                        "image": "/media/product_images/wheat.jpg",
+                        "location": "Bangalore",
+                        "quality": "good"
+                    }
+                },
+                "error": {
+                    "status": 400,
+                    "body": {
+                        "field_name": [
+                            "error message"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "name": "My Seed Listings",
+            "method": "GET",
+            "path": "/seed/",
+            "authentication_required": true,
+            "description": "Get all seed products listed by the current user.",
+            "request": {
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": [
+                        {
+                            "id": 1,
+                            "type": "seeds",
+                            "product_name": "Wheat Seeds",
+                            "date_of_listing": "2025-12-06",
+                            "certificate": "/media/certificates/cert.pdf",
+                            "amount_kg": "100.50",
+                            "market_price_per_kg_inr": "45.00",
+                            "image": "/media/product_images/wheat.jpg",
+                            "location": "Bangalore",
+                            "quality": "good",
+                            "created_at": "2025-12-06T10:30:00Z",
+                            "owner": 1
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "My Byproduct Listings",
+            "method": "GET",
+            "path": "/byproduct/",
+            "authentication_required": true,
+            "description": "Get all byproduct items listed by the current user.",
+            "request": {
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": [
+                        {
+                            "id": 2,
+                            "type": "byproduct",
+                            "product_name": "Rice Husk",
+                            "date_of_listing": "2025-12-06",
+                            "certificate": "/media/certificates/cert.pdf",
+                            "amount_kg": "500.00",
+                            "market_price_per_kg_inr": "10.00",
+                            "image": "/media/product_images/husk.jpg",
+                            "location": "Mysore",
+                            "quality": "mid",
+                            "created_at": "2025-12-06T11:00:00Z",
+                            "owner": 1
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Seed Market",
+            "method": "GET",
+            "path": "/market/seeds/",
+            "authentication_required": true,
+            "description": "Get all available seeds in the marketplace (amount > 0).",
+            "request": {
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": [
+                        {
+                            "id": 1,
+                            "product_name": "Wheat Seeds",
+                            "type": "seeds",
+                            "amount_kg": "100.50",
+                            "price_per_kg": "45.00",
+                            "owner": "farmer123",
+                            "certificate": "/media/certificates/cert.pdf",
+                            "image": "/media/product_images/wheat.jpg",
+                            "location": "Bangalore",
+                            "quality": "good"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Byproduct Market",
+            "method": "GET",
+            "path": "/market/byproducts/",
+            "authentication_required": true,
+            "description": "Get all available byproducts in the marketplace (amount > 0).",
+            "request": {
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": [
+                        {
+                            "id": 2,
+                            "product_name": "Rice Husk",
+                            "type": "byproduct",
+                            "amount_kg": "500.00",
+                            "price_per_kg": "10.00",
+                            "owner": "farmer456",
+                            "certificate": "/media/certificates/cert.pdf",
+                            "image": "/media/product_images/husk.jpg",
+                            "location": "Mysore",
+                            "quality": "mid"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Buy Product",
+            "method": "POST",
+            "path": "/buy/",
+            "authentication_required": true,
+            "description": "Purchase a product. Transfers entire quantity to escrow using blockchain.",
+            "request": {
+                "content_type": "application/json",
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                },
+                "body": {
+                    "product_id": "integer (required)"
+                },
+                "example": {
+                    "product_id": 1
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": {
+                        "message": "Successfully purchased 100.50kg of Wheat Seeds. Funds in Escrow."
+                    }
+                },
+                "error": {
+                    "status": 400,
+                    "body": {
+                        "error": "Product is out of stock | Funds not available | User profile not found"
+                    }
+                },
+                "error_404": {
+                    "status": 404,
+                    "body": {
+                        "error": "Product not found"
+                    }
+                },
+                "error_500": {
+                    "status": 500,
+                    "body": {
+                        "error": "Blockchain transaction error message"
+                    }
+                }
+            }
+        },
+        {
+            "name": "Confirm Receipt",
+            "method": "POST",
+            "path": "/confirm/",
+            "authentication_required": true,
+            "description": "Confirm goods received. Releases payment from escrow to seller.",
+            "request": {
+                "content_type": "application/json",
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                },
+                "body": {
+                    "order_id": "integer (required)"
+                },
+                "example": {
+                    "order_id": 1
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": {
+                        "message": "Receipt confirmed. Funds released to seller."
+                    }
+                },
+                "error_404": {
+                    "status": 404,
+                    "body": {
+                        "error": "Order not found or invalid status"
+                    }
+                },
+                "error_500": {
+                    "status": 500,
+                    "body": {
+                        "error": "Blockchain transaction error message"
+                    }
+                }
+            }
+        },
+        {
+            "name": "Request Refund",
+            "method": "POST",
+            "path": "/refund/",
+            "authentication_required": true,
+            "description": "Request refund for order. Returns funds from escrow to buyer.",
+            "request": {
+                "content_type": "application/json",
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                },
+                "body": {
+                    "order_id": "integer (required)"
+                },
+                "example": {
+                    "order_id": 1
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": {
+                        "message": "Refund processed. Funds returned to your wallet."
+                    }
+                },
+                "error_404": {
+                    "status": 404,
+                    "body": {
+                        "error": "Order not found or invalid status"
+                    }
+                },
+                "error_500": {
+                    "status": 500,
+                    "body": {
+                        "error": "Blockchain transaction error message"
+                    }
+                }
+            }
+        },
+        {
+            "name": "My Orders",
+            "method": "GET",
+            "path": "/orders/",
+            "authentication_required": true,
+            "description": "Get all orders placed by the current user.",
+            "request": {
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": [
+                        {
+                            "id": 1,
+                            "product_name": "Wheat Seeds",
+                            "amount": "4522.50",
+                            "status": "DEPOSITED",
+                            "date": "2025-12-06T12:00:00Z"
+                        },
+                        {
+                            "id": 2,
+                            "product_name": "Rice Husk",
+                            "amount": "5000.00",
+                            "status": "COMPLETED",
+                            "date": "2025-12-05T10:30:00Z"
+                        }
+                    ]
+                }
+            },
+            "notes": {
+                "status_values": [
+                    "PENDING - Order created but not yet deposited",
+                    "DEPOSITED - Funds in escrow, awaiting delivery",
+                    "COMPLETED - Goods received, payment released to seller",
+                    "REFUNDED - Order cancelled, funds returned to buyer"
+                ]
+            }
+        },
+        {
+            "name": "Generate Certificate",
+            "method": "POST",
+            "path": "/generate-certificate/",
+            "authentication_required": true,
+            "description": "Generate a quality certificate for a commodity.",
+            "request": {
+                "content_type": "application/json",
+                "headers": {
+                    "Authorization": "Bearer <token>"
+                },
+                "body": {
+                    "commodity": "string (required) - name of commodity",
+                    "date": "string (required) - YYYY-MM-DD format"
+                },
+                "example": {
+                    "commodity": "Wheat",
+                    "date": "2025-12-06"
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "body": {
+                        "message": "Certificate generated",
+                        "filename": "certificate_farmer123_1733512345.jpg"
+                    }
+                },
+                "error": {
+                    "status": 400,
+                    "body": {
+                        "error": "Commodity and Date are required"
+                    }
+                },
+                "error_500": {
+                    "status": 500,
+                    "body": {
+                        "error": "Error message"
+                    }
+                }
+            }
+        },
+        {
+            "name": "Download Certificate",
+            "method": "GET",
+            "path": "/download-certificate/<filename>/",
+            "authentication_required": false,
+            "description": "Download a generated certificate by filename. Public endpoint.",
+            "request": {
+                "path_parameters": {
+                    "filename": "string - certificate filename from generate-certificate response"
+                },
+                "example_url": "/download-certificate/certificate_farmer123_1733512345.jpg/"
+            },
+            "response": {
+                "success": {
+                    "status": 200,
+                    "content_type": "image/jpeg",
+                    "body": "Binary image data"
+                },
+                "error_400": {
+                    "status": 400,
+                    "body": {
+                        "error": "Invalid filename"
+                    }
+                },
+                "error_404": {
+                    "status": 404,
+                    "body": {
+                        "error": "File not found"
+                    }
+                }
+            }
+        },
+        {
+            "name": "ESP32 Sensor Data",
+            "method": "POST",
+            "path": "/esp32-data/",
+            "authentication_required": false,
+            "description": "Receive sensor data from ESP32 device. Public endpoint for IoT devices.",
+            "request": {
+                "content_type": "application/json",
+                "body": {
+                    "weight": "float (required)",
+                    "moisture": "float (required)",
+                    "volume": "float (required)",
+                    "density": "float (required)",
+                    "r": "integer (required) - RGB red value",
+                    "g": "integer (required) - RGB green value",
+                    "b": "integer (required) - RGB blue value",
+                    "score": "float (required) - quality score"
+                },
+                "example": {
+                    "weight": 125.5,
+                    "moisture": 12.3,
+                    "volume": 150.0,
+                    "density": 0.835,
+                    "r": 180,
+                    "g": 140,
+                    "b": 90,
+                    "score": 85.5
+                }
+            },
+            "response": {
+                "success": {
+                    "status": 201,
+                    "body": {
+                        "message": "Data received"
+                    }
+                },
+                "error": {
+                    "status": 400,
+                    "body": {
+                        "field_name": [
+                            "error message"
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "common_error_responses": {
+        "401_unauthorized": {
+            "status": 401,
+            "body": {
+                "detail": "Authentication credentials were not provided."
+            },
+            "description": "Returned when JWT token is missing or invalid"
+        },
+        "403_forbidden": {
+            "status": 403,
+            "body": {
+                "detail": "You do not have permission to perform this action."
+            },
+            "description": "Returned when user doesn't have required permissions"
+        }
+    },
+    "notes": {
+        "media_files": "All file URLs (certificate, image) are relative to MEDIA_URL (/media/). Full URL would be: http://localhost:8000/media/certificates/cert.pdf",
+        "date_format": "Dates should be sent in YYYY-MM-DD format. Timestamps are returned in ISO 8601 format.",
+        "decimal_fields": "All price and amount fields are returned as strings to preserve precision.",
+        "file_uploads": "Use multipart/form-data for endpoints that accept file uploads (create product).",
+        "blockchain": "Buy, confirm, and refund operations interact with Polygon Amoy testnet blockchain.",
+        "token_storage": "Store JWT token in localStorage or sessionStorage. Include in Authorization header as 'Bearer <token>'."
+    }
+}

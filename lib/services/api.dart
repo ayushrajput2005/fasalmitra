@@ -9,7 +9,7 @@ class ApiService {
 
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://your-backend.com',
+    defaultValue: 'http://localhost:8000/api',
   );
 
   final http.Client _client = http.Client();
@@ -28,6 +28,45 @@ class ApiService {
     Map<String, String>? queryParameters,
   }) {
     return _send('GET', path, token: token, queryParameters: queryParameters);
+  }
+
+  Future<Map<String, dynamic>> multipartRequest(
+    String method,
+    String path, {
+    Map<String, String>? fields,
+    List<http.MultipartFile>? files,
+    String? token,
+  }) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final request = http.MultipartRequest(method, uri);
+
+    if (token != null) {
+      request.headers['Authorization'] =
+          'Bearer $token'; // Changed to match "Bearer <token>" format in doc
+    }
+
+    if (fields != null) {
+      request.fields.addAll(fields);
+    }
+    if (files != null) {
+      request.files.addAll(files);
+    }
+
+    final streamlinedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamlinedResponse);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.isEmpty) return <String, dynamic>{};
+      final decoded = jsonDecode(response.body);
+      return decoded is Map<String, dynamic>
+          ? decoded
+          : <String, dynamic>{'data': decoded};
+    }
+
+    throw ApiException(
+      response.statusCode,
+      response.body.isNotEmpty ? response.body : 'Request failed',
+    );
   }
 
   Future<Map<String, dynamic>> _send(

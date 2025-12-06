@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:fasalmitra/screens/phone_login.dart';
@@ -102,36 +101,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      // 1. Create User in Auth
+      // 1. Create User in Auth (Now handles Registration fully)
       final credential = await AuthService.instance.signUpWithEmailPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        username: _usernameController.text.trim(),
+        mobile: _phoneController.text.trim(),
+        state: _selectedState,
       );
 
       final user = credential.user;
       if (user == null) throw AuthException('Registration failed');
 
-      // 2. Save User Details in Firestore
-      await AuthService.instance.registerUser(
-        uid: user.uid,
-        name: _usernameController.text.trim(),
-        email: _emailController.text.trim(),
-        phone: _phoneController.text.trim(),
-        state: _selectedState!,
-      );
-
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('Registration successful!')),
+        const SnackBar(content: Text('Registration successful!')),
       );
 
       // Navigate to Home
       Navigator.of(context).pushReplacementNamed('/');
     } catch (err) {
       String message = err.toString();
-      if (err is FirebaseAuthException) {
-        message = '${err.code}: ${err.message}';
-      } else if (err is AuthException) {
+      // Error handling is now generic AuthException or others
+      if (err is AuthException) {
         message = err.message;
       }
       messenger.showSnackBar(SnackBar(content: Text('Error: $message')));

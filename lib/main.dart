@@ -1,9 +1,6 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:fasalmitra/firebase_options.dart';
 import 'package:fasalmitra/screens/home_page.dart';
 import 'package:fasalmitra/widgets/custom_cursor_overlay.dart';
 
@@ -22,13 +19,7 @@ import 'package:fasalmitra/services/tip_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // Bypass reCAPTCHA for testing on localhost
-  // Note: This requires adding test phone numbers in Firebase Console -> Authentication -> Sign-in method -> Phone -> Phone numbers for testing
-  await FirebaseAuth.instance.setSettings(
-    appVerificationDisabledForTesting: true,
-  );
+  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform); // Removed Firebase
 
   final prefs = await SharedPreferences.getInstance();
   await AuthService.instance.init(prefs);
@@ -36,26 +27,17 @@ Future<void> main() async {
   await LanguageService.instance.init(prefs);
   await TipService.instance.init();
 
-  // Create test user if not exists
+  // Create test user if not exists (Optional check)
   try {
-    await AuthService.instance.signUpWithEmailPassword(
-      email: 'test@email.com',
-      password: 'Pass@123',
-    );
-    // If successful, also create profile in Firestore
-    final user = AuthService.instance.currentUser;
-    if (user != null) {
-      await AuthService.instance.registerUser(
-        uid: user.uid,
-        name: 'Test Tester',
-        email: 'test@email.com',
-        phone: '1234567890',
-        state: 'Maharashtra',
-      );
-      print('Test user created successfully');
-    }
+    // Mock check or skip this entirely if connected to real API to avoid spamming
+    // await AuthService.instance.signUpWithEmailPassword(
+    //   email: 'test@email.com',
+    //   password: 'Pass@123',
+    //   username: 'Test User',
+    //   mobile: '1234567890'
+    // );
   } catch (e) {
-    print('Test user creation skipped (likely already exists): $e');
+    print('Test user creation skipped: $e');
   }
 
   runApp(const FasalMitraApp());

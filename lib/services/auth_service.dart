@@ -1,5 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fasalmitra/services/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CaptchaData {
@@ -9,79 +8,152 @@ class CaptchaData {
   final String imageUrl;
 }
 
+class MockUser {
+  final String uid;
+  final String? email;
+  final String? phoneNumber;
+  final String? displayName;
+
+  MockUser({required this.uid, this.email, this.phoneNumber, this.displayName});
+}
+
+class MockUserCredential {
+  final MockUser? user;
+  MockUserCredential({this.user});
+}
+
 class AuthService {
   AuthService._();
 
   static final AuthService instance = AuthService._();
 
-  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   Map<String, dynamic>? _cachedUser;
   CaptchaData? _captcha;
+  String? _authToken;
+  late SharedPreferences _prefs;
 
   Future<void> init(SharedPreferences prefs) async {
-    // Listen to auth state changes to keep cache updated if needed
-    _firebaseAuth.authStateChanges().listen((User? user) {
-      if (user == null) {
-        _cachedUser = null;
+    _prefs = prefs;
+    _authToken = _prefs.getString('auth_token');
+    if (_authToken != null) {
+      try {
+        await fetchProfile();
+      } catch (e) {
+        _authToken = null;
+        await _prefs.remove('auth_token');
       }
-    });
-  }
-
-  User? get currentUser => _firebaseAuth.currentUser;
-  Map<String, dynamic>? get cachedUser => _cachedUser;
-  CaptchaData? get currentCaptcha => _captcha;
-
-  Future<UserCredential> signUpWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return credential;
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(e.message ?? 'Registration failed');
     }
   }
 
-  Future<UserCredential> signInWithEmailPassword({
+  MockUser? get currentUser {
+    if (_cachedUser != null) {
+      return MockUser(
+        uid: _cachedUser!['id'] ?? 'unknown',
+        email: _cachedUser!['email'],
+        phoneNumber: _cachedUser!['phone'] ?? _cachedUser!['mobile_no'],
+        displayName: _cachedUser!['username'] ?? _cachedUser!['name'],
+      );
+    }
+    return _authToken != null ? MockUser(uid: 'user_id_placeholder') : null;
+  }
+
+  bool get isLoggedIn => _authToken != null;
+  Map<String, dynamic>? get cachedUser => _cachedUser;
+  CaptchaData? get currentCaptcha => _captcha;
+  String? get token => _authToken;
+
+  Future<MockUserCredential> signUpWithEmailPassword({
+    required String email,
+    required String password,
+    required String username,
+    required String mobile,
+    String? state,
+  }) async {
+    try {
+      await ApiService.instance.post(
+        '/register/',
+        body: {
+          'username': username,
+          'email': email,
+          'password': password,
+          'mobile_no': mobile,
+          'state': state ?? '',
+        },
+      );
+
+      // Auto login after register
+      return await signInWithEmailPassword(email: email, password: password);
+    } catch (e) {
+      throw AuthException(e.toString());
+    }
+  }
+
+  Future<MockUserCredential> signInWithEmailPassword({
     required String email,
     required String password,
   }) async {
     try {
-      final credential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
+      final response = await ApiService.instance.post(
+        '/login/',
+        body: {'email': email, 'password': password},
       );
 
-      // Cache user data
-      if (credential.user != null) {
-        await fetchProfile();
-      }
+      if (response['success'] != null) {
+        final body = response['success']['body'];
+        final token = body['token'];
 
-      return credential;
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(e.message ?? 'Login failed');
+        if (token != null) {
+          _authToken = token;
+          await _prefs.setString('auth_token', token);
+          await fetchProfile();
+
+          return MockUserCredential(user: currentUser);
+        } else {
+          throw AuthException('Token missing in response');
+        }
+      } else if (response['error'] != null) {
+        throw AuthException(
+          response['error']['body']['error'] ?? 'Login failed',
+        );
+      } else {
+        throw AuthException('Unknown login response');
+      }
+    } catch (e) {
+      if (e is AuthException) rethrow; // Pass generic auth messages
+      // Extract detailed error if possible, e.g. from ApiException
+      throw AuthException(e.toString());
     }
   }
 
   Future<Map<String, dynamic>> fetchProfile() async {
-    final user = _firebaseAuth.currentUser;
-    if (user == null) {
+    if (_authToken == null) {
       throw AuthException('Please login again');
     }
 
     try {
-      final doc = await _firestore.collection('users').doc(user.uid).get();
-      if (!doc.exists) {
-        return {'id': user.uid, 'phone': user.phoneNumber};
+      final response = await ApiService.instance.get(
+        '/profile/',
+        token: _authToken,
+      );
+
+      if (response['success'] != null) {
+        final data = response['success']['body'] as Map<String, dynamic>;
+        // Map API format to Internal format if needed
+        // API: username, email, mobile_no, state, token_balance
+        // Internal expected: id, name, email, phone, state
+        _cachedUser = {
+          'id':
+              data['username'], // Using username as ID for now, or fetch from somewhere else? API doesn't return ID in profile?
+          'name': data['username'],
+          'email': data['email'],
+          'phone': data['mobile_no'],
+          'state': data['state'],
+          ...data,
+        };
+        return _cachedUser!;
+      } else {
+        throw AuthException('Failed to fetch profile data');
       }
-      _cachedUser = doc.data();
-      return _cachedUser!;
     } catch (e) {
       throw AuthException('Failed to fetch profile: $e');
     }
@@ -94,23 +166,20 @@ class AuthService {
     required String phone,
     required String state,
   }) async {
-    final userData = {
-      'id': uid,
-      'name': name,
-      'email': email,
-      'phone': phone,
-      'state': state,
-      'role': 'farmer', // Default role
-      'createdAt': FieldValue.serverTimestamp(),
-    };
-
-    await _firestore.collection('users').doc(uid).set(userData);
-    _cachedUser = userData;
+    // Deprecated/Redundant in new flow, but kept for compatibility.
+    // Ideally UI should stop calling this.
+    // We will do nothing here because signUpWithEmailPassword already did the job.
+    return;
   }
 
   Future<void> signOut() async {
-    await _firebaseAuth.signOut();
+    _authToken = null;
     _cachedUser = null;
+    await _prefs.remove('auth_token');
+    // Call API logout if desired (client side only per doc)
+    try {
+      // ApiService.instance.post('/logout/');
+    } catch (_) {}
   }
 
   Future<void> logout() => signOut();
